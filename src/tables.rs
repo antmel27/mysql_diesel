@@ -5,7 +5,7 @@ extern crate serde;
 
 /* use diesel::Associations;
 use diesel::Identifiable; */
-use diesel::{Queryable, Identifiable};
+use diesel::{Queryable/*Identifiable*/};
 use serde::{Deserialize, Serialize};
 //coursebooks relational table -- use mod coursebook?
 /* #[derive(Debug, Queryable, Associations, Identifiable)]

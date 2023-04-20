@@ -9,7 +9,6 @@ mod tables; //Import tables.rs
 use diesel::prelude::*;
 use dotenv::dotenv;
 use rocket::*;
-use rocket_contrib::json::Json;
 use std::env;
 use tables::Book;
 
