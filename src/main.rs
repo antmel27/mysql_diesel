@@ -2,6 +2,8 @@
 extern crate diesel;
 extern crate dotenv;
 extern crate rocket;
+extern crate rocket_contrib;
+extern crate serde_json;
 
 mod schema; //Import schema.rs
 mod tables; //Import tables.rs
@@ -11,7 +13,7 @@ use dotenv::dotenv;
 use rocket::*;
 use std::env;
 use tables::Book;
-
+use rocket_contrib::json::Json;
 pub fn create_connection() -> MysqlConnection {
     dotenv().ok();
 
@@ -31,13 +33,41 @@ fn get_books() -> String {
     let mut book_list = String::new();
 
     for book in all_books {
-        book_list.push_str(&format!("{:?}\n", book));
+        book_list.push_str(&serde_json::to_string(&book).unwrap());
     }
 
     book_list
 }
 
+#[get("/books/by-isbn/<isbn>")] //Function returning books based on ISBN13.
+fn get_book_isbn(isbn: String) -> String {
+    use schema::books::dsl::*; //Get the books table.
+    let connection = &mut create_connection();
+    let database_book = books.filter(isbn13.eq(isbn)).first::<Book>(connection); //Filter the result based on isbn.
+    let serialized_book = match database_book {
+        Ok(book) => serde_json::to_string(&book).unwrap(),
+        Err(err) => serde_json::to_string("Error retrieving book").unwrap(),
+    };
+    serialized_book
+}
+
+
+#[get("/books/by-id/<bid_input>")] //Function returning books based on bid.
+fn get_book_bid(bid_input: i32) -> String {
+    use schema::books::dsl::*; //Get the books table.
+    let connection = &mut create_connection();
+    let database_book = books.filter(bid.eq(bid_input)).first::<Book>(connection);
+    let serialized_book = match database_book {
+        Ok(book) => serde_json::to_string(&book).unwrap(),
+        Err(err) => serde_json::to_string("Error retrieving book").unwrap(),
+    };
+    serialized_book
+}
+
 #[launch]
 fn rocket() -> _ {
-    rocket::build().mount("/", routes![get_books])
+    rocket::build()
+        .mount("/", routes![get_books])
+        .mount("/", routes![get_book_isbn])
+        .mount("/", routes![get_book_bid])
 }

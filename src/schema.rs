@@ -1,3 +1,4 @@
+// @generated automatically by Diesel CLI.
 
 diesel::table! {
     book_tags (book_id, tag_id) {
@@ -47,20 +48,21 @@ diesel::table! {
     userbooks (borrow_id) {
         borrow_id -> Integer,
         book_id -> Integer,
-        encrypted_user_id -> Varchar,
         borrow_date -> Date,
         return_date -> Date,
+        user_id -> Integer,
     }
 }
 
 diesel::table! {
     users (user_id) {
         user_id -> Integer,
-        encrypted_user_id -> Varchar,
-        salted_user_id -> Varchar,
         subscription_status -> Bool,
         term -> Integer,
         year -> Integer,
+        email -> Varchar,
+        hashed_password -> Varchar,
+        salt -> Varchar,
     }
 }
 
@@ -69,6 +71,7 @@ diesel::joinable!(book_tags -> tags (tag_id));
 diesel::joinable!(coursebooks -> books (bid));
 diesel::joinable!(coursebooks -> courses (cid));
 diesel::joinable!(userbooks -> books (book_id));
+diesel::joinable!(userbooks -> users (user_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
     book_tags,
