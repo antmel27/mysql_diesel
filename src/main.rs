@@ -8,12 +8,11 @@ extern crate serde_json;
 mod schema; //Import schema.rs
 mod tables; //Import tables.rs
 
-use diesel::prelude::*;
+use diesel::{prelude::*, update};
 use dotenv::dotenv;
 use rocket::*;
 use std::env;
 use tables::Book;
-use rocket_contrib::json::Json;
 pub fn create_connection() -> MysqlConnection {
     dotenv().ok();
 
@@ -51,7 +50,6 @@ fn get_book_isbn(isbn: String) -> String {
     serialized_book
 }
 
-
 #[get("/books/by-id/<bid_input>")] //Function returning books based on bid.
 fn get_book_bid(bid_input: i32) -> String {
     use schema::books::dsl::*; //Get the books table.
@@ -63,11 +61,43 @@ fn get_book_bid(bid_input: i32) -> String {
     };
     serialized_book
 }
+#[get("/books/increase/<isbn>/<quantity>")]
+fn increase_stock(isbn: String, quantity: i32) {
+    use schema::books::dsl::*; //Get the books table.
+    let isbn_clone = isbn.clone();
+    let connection = &mut create_connection(); //Establish connection
+    let query_book = books.filter(isbn13.eq(isbn)).first::<Book>(connection); //Get the book to update.
+    let new_stock = match query_book {
+        Ok(book) => book.stock.map(|other_stock| other_stock + quantity), //Need to use map since stock is optional value.
+        Err(_) => None,
+    };
+    //Update the book with the new stock value.
+    let __result = update(books.filter(isbn13.eq(isbn_clone))) //Find the row we want to update.
+        .set(stock.eq(new_stock)) //Set new stock value.
+        .execute(connection);
+}
 
+#[get("/books/decrease/<isbn>")] // Decreases stock by 1.
+fn decrease_stock(isbn: String) {
+    use schema::books::dsl::*; //Get the books table.
+    let isbn_clone = isbn.clone();
+    let connection = &mut create_connection(); //Establish connection
+    let query_book = books.filter(isbn13.eq(isbn)).first::<Book>(connection); //Get the book to update.
+    let new_stock = match query_book {
+        Ok(book) => book.stock.map(|other_stock| other_stock - 1), //Need to use map since stock is optional value.
+        Err(_) => None,
+    };
+    //Update the book with the new stock value.
+    let __result = update(books.filter(isbn13.eq(isbn_clone))) //Find the row we want to update.
+        .set(stock.eq(new_stock)) //Set new stock value.
+        .execute(connection);
+}
 #[launch]
 fn rocket() -> _ {
     rocket::build()
         .mount("/", routes![get_books])
         .mount("/", routes![get_book_isbn])
         .mount("/", routes![get_book_bid])
+        .mount("/", routes![increase_stock])
+        .mount("/", routes![decrease_stock])
 }

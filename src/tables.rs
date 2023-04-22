@@ -28,7 +28,6 @@ pub struct Book {
     pub description: Option<String>,
 }
 
-
 #[derive(Debug, Queryable)]
 pub struct Course {
     pub cid: i32,
