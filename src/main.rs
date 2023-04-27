@@ -14,7 +14,6 @@ use rocket::*;
 use std::{env, time::SystemTime};
 use sha256::*;
 
-use std::env;
 use models::*;
 use chrono::{NaiveDate, Local};
 
