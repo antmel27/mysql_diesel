@@ -11,6 +11,9 @@ mod models; //Import models.rs
 use diesel::{prelude::*, update, insert_into};
 use dotenv::dotenv;
 use rocket::*;
+use std::{env, time::SystemTime};
+use sha256::*;
+
 use std::env;
 use models::*;
 use chrono::{NaiveDate, Local};
@@ -23,7 +26,7 @@ pub fn create_connection() -> MysqlConnection {
         .unwrap_or_else(|_| panic!("Error connecting to {}", database_url))
 }
 
-#[get("/books")] //Function returning all books as string.
+#[get("/")] //Function returning all books as string.
 fn get_books() -> String {
     use schema::books::dsl::*; //Get the books table.
     let connection = &mut create_connection();
@@ -39,32 +42,34 @@ fn get_books() -> String {
     book_list
 }
 
-#[get("/books/by-isbn/<isbn>")] //Function returning books based on ISBN13.
+#[get("/by-isbn/<isbn>")] //Function returning books based on ISBN13.
 fn get_book_isbn(isbn: String) -> String {
     use schema::books::dsl::*; //Get the books table.
     let connection = &mut create_connection();
     let database_book = books.filter(isbn13.eq(isbn)).first::<Book>(connection); //Filter the result based on isbn.
-    let serialized_book = match database_book {
+    match database_book {
         Ok(book) => serde_json::to_string(&book).unwrap(),
-        Err(err) => serde_json::to_string("Error retrieving book").unwrap(),
-    };
-    serialized_book
+        Err(_) => serde_json::to_string("Error retrieving book").unwrap(),
+    }
 }
 
-#[get("/books/by-id/<bid_input>")] //Function returning books based on bid.
+#[get("/by-id/<bid_input>")] //Function returning books based on bid.
 fn get_book_bid(bid_input: i32) -> String {
     use schema::books::dsl::*; //Get the books table.
     let connection = &mut create_connection();
     let database_book = books.filter(bid.eq(bid_input)).first::<Book>(connection);
-    let serialized_book = match database_book {
+    match database_book {
         Ok(book) => serde_json::to_string(&book).unwrap(),
-        Err(err) => serde_json::to_string("Error retrieving book").unwrap(),
-    };
-    serialized_book
+        Err(_) => serde_json::to_string("Error retrieving book").unwrap(),
+    }
 }
 
-#[get("/books/increase/<isbn>/<quantity>")]
-fn increase_stock(isbn: String, quantity: i32) {
+#[get("/increase/<isbn>/<quantity>/<totp>")]
+fn increase_stock(isbn: String, quantity: i32, totp: String) {
+    if !totp_gen().contains(&totp) {
+        return
+    }
+
     use schema::books::dsl::*; //Get the books table.
     let isbn_clone = isbn.clone();
     let connection = &mut create_connection(); //Establish connection
@@ -79,8 +84,12 @@ fn increase_stock(isbn: String, quantity: i32) {
         .execute(connection);
 }
 
-#[get("/books/decrease/<isbn>")] // Decreases stock by 1.
-fn decrease_stock(isbn: String) {
+#[get("/decrease/<isbn>/<totp>")] // Decreases stock by 1.
+fn decrease_stock(isbn: String, totp: String) {
+    if !totp_gen().contains(&totp) {
+        return
+    }
+
     use schema::books::dsl::*; //Get the books table.
     let isbn_clone = isbn.clone();
     let connection = &mut create_connection(); //Establish connection
@@ -185,4 +194,26 @@ fn rocket() -> _ {
         .mount("/", routes![increase_stock])
         .mount("/", routes![decrease_stock])
         .mount("/", routes![get_related_course_by_id])
+}
+
+fn totp_gen() -> Vec<String> {
+    let current_tm = match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
+        Ok(n) => n.as_secs(),
+        Err(_) => panic!("fuck")
+    };
+    let tm_0 = ((current_tm-30)/30).to_string();
+    let tm_1 = (current_tm/30).to_string();
+    let tm_2 = ((current_tm+30)/30).to_string();
+
+    let key = env::var("TOTP_SECRET").expect("uhhhhhhhhh");
+    let totp_0 = digest(format!("{}{}", key, tm_0));
+    let totp_1 = digest(format!("{}{}", key, tm_1));
+    let totp_2 = digest(format!("{}{}", key, tm_2));
+
+    vec![
+        totp_0[totp_0.len()-6..totp_0.len()].to_string(), 
+        totp_1[totp_1.len()-6..totp_1.len()].to_string(), 
+        totp_2[totp_2.len()-6..totp_2.len()].to_string()
+        ]
+
 }
