@@ -25,7 +25,7 @@ pub fn create_connection() -> MysqlConnection {
         .unwrap_or_else(|_| panic!("Error connecting to {}", database_url))
 }
 
-#[get("/")] //Function returning all books as string.
+#[get("/books")] //Function returning all books as string.
 fn get_books() -> String {
     use schema::books::dsl::*; //Get the books table.
     let connection = &mut create_connection();
@@ -41,7 +41,7 @@ fn get_books() -> String {
     book_list
 }
 
-#[get("/by-isbn/<isbn>")] //Function returning books based on ISBN13.
+#[get("/books/by-isbn/<isbn>")] //Function returning books based on ISBN13.
 fn get_book_isbn(isbn: String) -> String {
     use schema::books::dsl::*; //Get the books table.
     let connection = &mut create_connection();
@@ -52,7 +52,7 @@ fn get_book_isbn(isbn: String) -> String {
     }
 }
 
-#[get("/by-id/<bid_input>")] //Function returning books based on bid.
+#[get("/books/by-id/<bid_input>")] //Function returning books based on bid.
 fn get_book_bid(bid_input: i32) -> String {
     use schema::books::dsl::*; //Get the books table.
     let connection = &mut create_connection();
@@ -63,6 +63,35 @@ fn get_book_bid(bid_input: i32) -> String {
     }
 }
 
+#[get("/books/related-course/by-id/<bid>")]
+fn get_related_course_by_id(bid: i32) -> String
+{
+    use schema::coursebooks::dsl::*;
+    use schema::courses::dsl::*;
+
+    let connection = &mut create_connection(); //Establish connection
+    let related_course_bids = coursebooks.filter(coursebook_book_id.eq(bid))
+        .load::<Coursebook>(connection) //Load all the coursebooks that have a matching bid.
+        .expect("Error loading coursebooks"); //In-case of fail
+        let mut course_string = String::new();
+
+    for coursebook in related_course_bids { //Iterate over all the found coursebooks.
+        let related_course = courses
+        .filter(cid.eq(coursebook.coursebook_course_id))
+        .first::<Course>(connection)
+        .expect("Error loading related courses");
+        course_string.push_str(&related_course.course_name);
+        course_string.push_str(",");
+        course_string.push_str(" ");
+    }
+    course_string.pop();
+    course_string.pop();
+    course_string
+    //Establish connection,
+    //Look in coursebook table for related course.
+    //Get the coursenames.
+
+}
 #[get("/increase/<isbn>/<quantity>")]
 fn increase_stock(isbn: String, quantity: i32) {
 /*     if !totp_gen().contains(&totp) {
@@ -103,35 +132,6 @@ fn decrease_stock(isbn: String) {
         .execute(connection);
 }
 
-#[get("/books/related-course/by-id/<bid>")]
-fn get_related_course_by_id(bid: i32) -> String
-{
-    use schema::coursebooks::dsl::*;
-    use schema::courses::dsl::*;
-
-    let connection = &mut create_connection(); //Establish connection
-    let related_course_bids = coursebooks.filter(coursebook_book_id.eq(bid))
-        .load::<Coursebook>(connection) //Load all the coursebooks that have a matching bid.
-        .expect("Error loading coursebooks"); //In-case of fail
-        let mut course_string = String::new();
-
-    for coursebook in related_course_bids { //Iterate over all the found coursebooks.
-        let related_course = courses
-        .filter(cid.eq(coursebook.coursebook_course_id))
-        .first::<Course>(connection)
-        .expect("Error loading related courses");
-        course_string.push_str(&related_course.course_name);
-        course_string.push_str(",");
-        course_string.push_str(" ");
-    }
-    course_string.pop();
-    course_string.pop();
-    course_string
-    //Establish connection,
-    //Look in coursebook table for related course.
-    //Get the coursenames.
-
-}
 
 /* #[get("/borrow/<address>/<husnummer>/<postkod>/<stad>/<isbn>/<token>")]
 fn borrow_book(address: String, husnummer: String, postkod: i32, stad: String, isbn: String, token: String)
