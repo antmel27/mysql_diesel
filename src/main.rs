@@ -63,11 +63,11 @@ fn get_book_bid(bid_input: i32) -> String {
     }
 }
 
-#[get("/increase/<isbn>/<quantity>/<totp>")]
-fn increase_stock(isbn: String, quantity: i32, totp: String) {
-    if !totp_gen().contains(&totp) {
+#[get("/increase/<isbn>/<quantity>")]
+fn increase_stock(isbn: String, quantity: i32) {
+/*     if !totp_gen().contains(&totp) {
         return
-    }
+    } */
 
     use schema::books::dsl::*; //Get the books table.
     let isbn_clone = isbn.clone();
@@ -83,11 +83,11 @@ fn increase_stock(isbn: String, quantity: i32, totp: String) {
         .execute(connection);
 }
 
-#[get("/decrease/<isbn>/<totp>")] // Decreases stock by 1.
-fn decrease_stock(isbn: String, totp: String) {
-    if !totp_gen().contains(&totp) {
+#[get("/decrease/<isbn>")] // Decreases stock by 1.
+fn decrease_stock(isbn: String) {
+/*     if !totp_gen().contains(&totp) {
         return
-    }
+    } */
 
     use schema::books::dsl::*; //Get the books table.
     let isbn_clone = isbn.clone();
@@ -132,6 +132,7 @@ fn get_related_course_by_id(bid: i32) -> String
     //Get the coursenames.
 
 }
+
 /* #[get("/borrow/<address>/<husnummer>/<postkod>/<stad>/<isbn>/<token>")]
 fn borrow_book(address: String, husnummer: String, postkod: i32, stad: String, isbn: String, token: String)
 { //Function for a user to borrow book.
