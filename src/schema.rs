@@ -20,9 +20,9 @@ diesel::table! {
 }
 
 diesel::table! {
-    coursebooks (bid, cid) {
-        bid -> Integer,
-        cid -> Integer,
+    coursebooks (coursebook_book_id, coursebook_course_id) {
+        coursebook_book_id -> Integer,
+        coursebook_course_id -> Integer,
     }
 }
 
@@ -60,16 +60,14 @@ diesel::table! {
         subscription_status -> Bool,
         term -> Integer,
         year -> Integer,
-        email -> Varchar,
-        hashed_password -> Varchar,
-        salt -> Varchar,
+        uid -> Varchar,
     }
 }
 
 diesel::joinable!(book_tags -> books (book_id));
 diesel::joinable!(book_tags -> tags (tag_id));
-diesel::joinable!(coursebooks -> books (bid));
-diesel::joinable!(coursebooks -> courses (cid));
+diesel::joinable!(coursebooks -> books (coursebook_book_id));
+diesel::joinable!(coursebooks -> courses (coursebook_course_id));
 diesel::joinable!(userbooks -> books (book_id));
 diesel::joinable!(userbooks -> users (user_id));
 
