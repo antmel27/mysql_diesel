@@ -133,20 +133,23 @@ fn decrease_stock(isbn: String) {
 }
 
 
-/* #[get("/borrow/<address>/<husnummer>/<postkod>/<stad>/<isbn>/<token>")]
+#[get("/borrow/<address>/<husnummer>/<postkod>/<stad>/<isbn>/<token>")]
 fn borrow_book(address: String, husnummer: String, postkod: i32, stad: String, isbn: String, token: String)
 { //Function for a user to borrow book.
     use schema::books::dsl::*;
     use schema::userbooks::dsl::*;
     use schema::coursebooks::dsl::*;
+    use schema::userbooks::columns::user_id;
     use schema::courses::dsl::*;
     use schema::users::dsl::*;
     
-    // TOKEN AUTHENTICATION HERE //
+    // TOKEN AUTHENTICATION INSERT HERE //
+    // NEED BOOK_ID, BORROW_DATE, RETURN_DATE, USER_ID
     let isbn_clone = isbn.clone(); //Clone because isbn is moved later.
     let connection = &mut create_connection(); //Establish connection
-    let found_book = books.filter(isbn13.eq(isbn)).first::<Book>(connection).unwrap(); //Get the book we want to borrow.
     
+    //GETTING BOOK_ID
+    let found_book = books.filter(isbn13.eq(isbn)).first::<Book>(connection).unwrap(); //Get the book we want to borrow.
     let book_bid = found_book.bid; //Get the book id.
     //ONLY FIRST BELOW?
     let coursebook_entry = coursebooks.filter(coursebook_book_id.eq(book_bid)).first::<Coursebook>(connection).unwrap(); //
@@ -165,19 +168,21 @@ fn borrow_book(address: String, husnummer: String, postkod: i32, stad: String, i
         _ => NaiveDate::from_ymd_opt(1970, 1, 1), //If out of bounds period.
         }.unwrap(); //Get the return date.
     let associated_user_id = users.filter(uid.eq(token)).first::<User>(connection).unwrap().user_id;
-    let new_userbook_entry = Userbook {
+/*     let new_userbook_entry = Userbook {
+        borrow_id: 1,
         book_id: book_bid,
         borrow_date: borrow_dat,
         return_date: return_dat,
         user_id: associated_user_id,
-    };
+    }; */
     
     insert_into(userbooks)
-        .values(&new_userbook_entry)
+        .values((book_id.eq(book_bid), borrow_date.eq(borrow_dat), return_date.eq(return_dat), user_id.eq(associated_user_id)))
         .execute(connection);
+    
     //Check what period course is in.
     decrease_stock(isbn_clone); //Decrease the stock of book when it has been succesfully borrowed.
-} */
+} 
 /* #[get("/userbooks/<uid>/<token>")] //Function to get all books
 fn get_userbooks(uid: String, token: String) -> String
 {

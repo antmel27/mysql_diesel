@@ -53,15 +53,15 @@ pub struct Tag {
     pub tag: String,
 }
 
-#[derive(Queryable, Debug, Identifiable, Serialize, Deserialize, /* Insertable */)]
-#[diesel(primary_key(borrow_id))]
+#[derive(Queryable, Debug, Serialize, Deserialize, Insertable)]
+#[diesel(table_name = userbooks)]
 pub struct Userbook {
     pub borrow_id: i32,
     pub book_id: i32,
     pub borrow_date: NaiveDate,
     pub return_date: NaiveDate,
     pub user_id: i32,
-}
+} 
 
 #[derive(Queryable, Debug, Identifiable, Serialize, Deserialize)]
 #[diesel(primary_key(user_id))]
