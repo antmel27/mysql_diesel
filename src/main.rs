@@ -196,9 +196,10 @@ fn rocket() -> _ {
         .mount("/", routes![get_books])
         .mount("/", routes![get_book_isbn])
         .mount("/", routes![get_book_bid])
+        .mount("/", routes![get_related_course_by_id])
         .mount("/", routes![increase_stock])
         .mount("/", routes![decrease_stock])
-        .mount("/", routes![get_related_course_by_id])
+        .mount("/", routes![borrow_book])
 }
 
 fn totp_gen() -> Vec<String> {
