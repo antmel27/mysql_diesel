@@ -4,7 +4,7 @@
 #![allow(clippy::all)] */
 
 
-use diesel::{Queryable, Identifiable, Associations, Insertable};
+use diesel::{Queryable, Identifiable, Insertable};
 use serde::{Deserialize, Serialize};
 use chrono::NaiveDate;
 include!("schema.rs");
@@ -26,6 +26,7 @@ pub struct Book {
     pub edition: Option<String>,
     pub stock: Option<i32>,
     pub description: Option<String>,
+    pub price: Option<i32>,
 }
 
 #[derive(Queryable, Debug, Identifiable, Serialize, Deserialize)]

@@ -16,6 +16,7 @@ diesel::table! {
         edition -> Nullable<Varchar>,
         stock -> Nullable<Integer>,
         description -> Nullable<Text>,
+        price -> Nullable<Integer>,
     }
 }
 
