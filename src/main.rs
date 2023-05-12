@@ -236,13 +236,14 @@ async fn borrow_book(name_of_reciever: String, address: String, husnummer: Strin
 } 
 
 #[get("/userbooks/<token>")] //Function to get all books
-async fn get_userbooks(token: String) 
+async fn get_userbooks(token: String) -> String
 {
     use schema::books::dsl::*;
     use schema::users::dsl::*;
     use schema::userbooks::columns::user_id;
+    let token_clone = token.clone();
     if !verify_token(token).await {
-        return
+        return format!("")
     }
 
     use schema::userbooks::dsl::*;
@@ -250,7 +251,7 @@ async fn get_userbooks(token: String)
 
     let connection = &mut create_connection(); //Establish connection
     
-    let associated_user_option: Result<User, diesel::result::Error> = users.filter(uid.eq(token)).first::<User>(connection);
+    let associated_user_option: Result<User, diesel::result::Error> = users.filter(uid.eq(token_clone)).first::<User>(connection);
     let associated_user = match associated_user_option {
         Ok(associated_user_result) => associated_user_result,
         Err(err) => return format!("{}", err),
@@ -354,7 +355,7 @@ async fn return_book(isbn: String, token: String) -> String {
 async fn sell_book(isbn: String, token: String) -> String {
 
     if !verify_token(token).await {
-        return
+        return format!("Error: Token verification failed.")
     }
     //User authentication
     increase_stock(isbn, 1) //Increase the stock by one.
