@@ -150,8 +150,8 @@ fn decrease_stock(isbn: String) -> String {
 }
 
 
-#[get("/borrow/<isbn>/<token>")]
-fn borrow_book(isbn: String, token: String) -> String
+#[get("/borrow/<name_of_reciever>/<address>/<husnummer>/<postkod>/<stad>/<isbn>/<token>")]
+async fn borrow_book(name_of_reciever: String, address: String, husnummer: String, postkod: i32, stad: String, isbn: String, token: String) -> String
 { //Function for a user to borrow book.
     use schema::books::dsl::*;
     use schema::userbooks::dsl::*;
@@ -161,6 +161,26 @@ fn borrow_book(isbn: String, token: String) -> String
     use schema::users::dsl::*;
     
     // TOKEN AUTHENTICATION INSERT HERE //
+
+    let client = reqwest::Client::new();
+	let token_uid: String = match client.get(format!("https://courseLend.akerhielm.nu/auth/whoami/{token}"))
+	.send().await {
+		Ok(res) => match res.text().await {
+			Ok(res) => {
+				let sub: serde_json::Value = serde_json::from_str(&res).unwrap();
+				if !sub["sub"].is_null() {
+					return "Could not authenticate".to_string()
+				} else {
+                    sub["sub"].as_str().unwrap().to_string()
+                }
+			},
+			Err(_) => return "Could not authenticate".to_string()
+		},
+		Err(_) => return "Could not authenticate".to_string()
+	};
+
+
+    // NEED BOOK_ID, BORROW_DATE, RETURN_DATE, USER_ID
     let isbn_clone = isbn.clone(); //Clone because isbn is moved later.
     let connection = &mut create_connection(); //Establish connection
     
@@ -216,11 +236,15 @@ fn borrow_book(isbn: String, token: String) -> String
 } 
 
 #[get("/userbooks/<token>")] //Function to get all books
-fn get_userbooks(token: String) -> String
+async fn get_userbooks(token: String) 
 {
     use schema::books::dsl::*;
     use schema::users::dsl::*;
     use schema::userbooks::columns::user_id;
+    if !verify_token(token).await {
+        return
+    }
+
     use schema::userbooks::dsl::*;
     //AUTHENTICATION
 
@@ -265,7 +289,26 @@ fn get_userbooks(token: String) -> String
 } 
 
 #[get("/return/<isbn>/<token>")]
-fn return_book(isbn: String, token: String) -> String { 
+async fn return_book(isbn: String, token: String) -> String { 
+
+    let client = reqwest::Client::new();
+	let token_uid: String = match client.get(format!("https://courseLend.akerhielm.nu/auth/whoami/{token}"))
+	.send().await {
+		Ok(res) => match res.text().await {
+			Ok(res) => {
+				let sub: serde_json::Value = serde_json::from_str(&res).unwrap();
+				if !sub["sub"].is_null() {
+					return "Could not authenticate".to_string()
+				} else {
+                    sub["sub"].as_str().unwrap().to_string()
+                }
+			},
+			Err(_) => return "Could not authenticate".to_string()
+		},
+		Err(_) => return "Could not authenticate".to_string()
+	};
+
+
     use schema::books::dsl::*;
     use schema::userbooks::dsl::*;
     use schema::userbooks::columns::user_id;
@@ -276,7 +319,7 @@ fn return_book(isbn: String, token: String) -> String {
     let isbn_clone = isbn.clone(); //Clone because isbn is moved later.
     let connection = &mut create_connection(); //Establish connection
     
-    let associated_user_option: Result<User, diesel::result::Error> = users.filter(uid.eq(token)).first::<User>(connection);
+    let associated_user_option: Result<User, diesel::result::Error> = users.filter(uid.eq(token_uid)).first::<User>(connection);
     let associated_user = match associated_user_option {
         Ok(associated_user_result) => associated_user_result,
         Err(err) => return format!("Error: {}", err),
@@ -308,15 +351,37 @@ fn return_book(isbn: String, token: String) -> String {
 }
 
 #[get("/buy/<isbn>/<token>")]
-fn sell_book(isbn: String, token: String) -> String {
+async fn sell_book(isbn: String, token: String) -> String {
 
+    if !verify_token(token).await {
+        return
+    }
     //User authentication
     increase_stock(isbn, 1) //Increase the stock by one.
 }
 
 #[get("/books/next-period/<token>")] //Function that returns the books the user will need in the next period.
-fn get_next_period_books(token: String) -> String
+async fn get_next_period_books(token: String) -> String
 {
+
+    let client = reqwest::Client::new();
+	let token_uid: String = match client.get(format!("https://courseLend.akerhielm.nu/auth/whoami/{token}"))
+	.send().await {
+		Ok(res) => match res.text().await {
+			Ok(res) => {
+				let sub: serde_json::Value = serde_json::from_str(&res).unwrap();
+				if !sub["sub"].is_null() {
+					return "Could not authenticate".to_string()
+				} else {
+                    sub["sub"].as_str().unwrap().to_string()
+                }
+			},
+			Err(_) => return "Could not authenticate".to_string()
+		},
+		Err(_) => return "Could not authenticate".to_string()
+	};
+
+
     use schema::users::dsl::*;
     use schema::books::dsl::*;
     use schema::coursebooks::dsl::*;
@@ -381,6 +446,22 @@ fn rocket() -> _ {
         .mount("/", routes![sell_book])
         .mount("/", routes![get_next_period_books])
 
+}
+
+async fn verify_token(token: String) -> bool {
+    let client = reqwest::Client::new();
+    match client.get(format!("https://courselend.akerhielm.nu/auth/verify/{token}")).send().await {
+        Ok(res) => {
+            match res.text().await {
+                Ok(text) => {
+                    let v: serde_json::Value = serde_json::from_str(&text).unwrap();
+                    v["response"].eq("Invalid token")
+                },
+                Err(_) => false
+            }
+        },
+        Err(_) => false
+    }
 }
 
 fn totp_gen() -> Vec<String> {
