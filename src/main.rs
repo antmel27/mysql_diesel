@@ -29,16 +29,18 @@ pub fn create_connection() -> MysqlConnection {
 fn get_books() -> String {
     use schema::books::dsl::*; //Get the books table.
     let connection = &mut create_connection();
-    let all_books = books
-        .load::<Book>(connection) //Load all the books
-        .expect("Error loading books"); //In-case of fail
+    let all_books_option = books.load::<Book>(connection); //Load all the books
+    
+    let all_books = match all_books_option {
+        Ok(all_books) => all_books,
+        Err(err) => return format!("Error: {}", err),
+    };
+    
     let mut book_list = String::new();
-
     for book in all_books {
         book_list.push_str(&serde_json::to_string(&book).unwrap());
     }
-
-    book_list
+    return book_list
 }
 
 #[get("/books/by-isbn/<isbn>")] //Function returning books based on ISBN13.
@@ -48,7 +50,7 @@ fn get_book_isbn(isbn: String) -> String {
     let database_book = books.filter(isbn13.eq(isbn)).first::<Book>(connection); //Filter the result based on isbn.
     match database_book {
         Ok(book) => serde_json::to_string(&book).unwrap(),
-        Err(_) => serde_json::to_string("Error retrieving book").unwrap(),
+        Err(_) => serde_json::to_string("Error: Couldn't retrieve book with such ISBN13.").unwrap(),
     }
 }
 
@@ -59,7 +61,7 @@ fn get_book_bid(bid_input: i32) -> String {
     let database_book = books.filter(bid.eq(bid_input)).first::<Book>(connection);
     match database_book {
         Ok(book) => serde_json::to_string(&book).unwrap(),
-        Err(_) => serde_json::to_string("Error retrieving book").unwrap(),
+        Err(_) => serde_json::to_string("Error: Couldn't retrieve book with such bid.").unwrap(),
     }
 }
 
@@ -70,20 +72,28 @@ fn get_related_course_by_id(bid: i32) -> String
     use schema::courses::dsl::*;
 
     let connection = &mut create_connection(); //Establish connection
-    let related_course_bids = coursebooks.filter(coursebook_book_id.eq(bid))
-        .load::<Coursebook>(connection) //Load all the coursebooks that have a matching bid.
-        .expect("Error loading coursebooks"); //In-case of fail
-        let mut course_string = String::new();
-
+    let related_course_bids_option: Result<Vec<Coursebook>, diesel::result::Error> = coursebooks.filter(coursebook_book_id.eq(bid)).load::<Coursebook>(connection); //Load all the coursebooks that have a matching bid.
+    let related_course_bids = match related_course_bids_option {
+        Ok(related_course_bids_result) => related_course_bids_result,
+        Err(err) => return format!("Error: {}", err),
+    };
+    
+    let mut course_string = String::new();
     for coursebook in related_course_bids { //Iterate over all the found coursebooks.
-        let related_course = courses
+        let related_course_option = courses
         .filter(cid.eq(coursebook.coursebook_course_id))
-        .first::<Course>(connection)
-        .expect("Error loading related courses");
+        .first::<Course>(connection);
+        
+        let related_course = match related_course_option {
+            Ok(related_course_result) => related_course_result,
+            Err(_) => continue, //If error simply skip to next iteration of loop.
+        };
+        
         course_string.push_str(&related_course.course_name);
         course_string.push_str(",");
         course_string.push_str(" ");
     }
+   
     course_string.pop();
     course_string.pop();
     course_string
@@ -92,25 +102,31 @@ fn get_related_course_by_id(bid: i32) -> String
     //Get the coursenames.
 
 }
-#[get("/increase/<isbn>/<quantity>")]
-fn increase_stock(isbn: String, quantity: i32) {
 
-    use schema::books::dsl::*; //Get the books table.
+#[get("/increase/<isbn>/<quantity>")]
+fn increase_stock(isbn: String, quantity: i32) -> String {
+
+    use schema::books::dsl::*; 
+    
     let isbn_clone = isbn.clone();
     let connection = &mut create_connection(); //Establish connection
     let query_book = books.filter(isbn13.eq(isbn)).first::<Book>(connection); //Get the book to update.
     let new_stock = match query_book {
         Ok(book) => book.stock.map(|other_stock| other_stock + quantity), //Need to use map since stock is optional value.
-        Err(_) => None,
+        Err(err) => return format!("Error: {}", err),
     };
     //Update the book with the new stock value.
-    let __result = update(books.filter(isbn13.eq(isbn_clone))) //Find the row we want to update.
+    let result = update(books.filter(isbn13.eq(isbn_clone))) //Find the row we want to update.
         .set(stock.eq(new_stock)) //Set new stock value.
         .execute(connection);
+    match result {
+        Ok(_) => return format!("Succesfully increased stock."),
+        Err(err) => return format!("Error: {}", err)
+    };
 }
 
 #[get("/decrease/<isbn>")] // Decreases stock by 1.
-fn decrease_stock(isbn: String) {
+fn decrease_stock(isbn: String) -> String {
 /*     if !totp_gen().contains(&totp) {
         return
     } */
@@ -121,17 +137,21 @@ fn decrease_stock(isbn: String) {
     let query_book = books.filter(isbn13.eq(isbn)).first::<Book>(connection); //Get the book to update.
     let new_stock = match query_book {
         Ok(book) => book.stock.map(|other_stock| other_stock - 1), //Need to use map since stock is optional value.
-        Err(_) => None,
+        Err(_) => None, //If stock was null we simply do nothing.
     };
-    //Update the book with the new stock value.
-    let __result = update(books.filter(isbn13.eq(isbn_clone))) //Find the row we want to update.
+
+    let result = update(books.filter(isbn13.eq(isbn_clone))) //Find the row we want to update.
         .set(stock.eq(new_stock)) //Set new stock value.
         .execute(connection);
+    match result {
+        Ok(_) => return format!("Succesfully decreased stock"),
+        Err(err) => return format!("Error: {}", err)
+    };
 }
 
 
-#[get("/borrow/<name_of_reciever>/<address>/<husnummer>/<postkod>/<stad>/<isbn>/<token>")]
-fn borrow_book(address: String, husnummer: String, postkod: i32, stad: String, isbn: String, token: String) -> String
+#[get("/borrow/<isbn>/<token>")]
+fn borrow_book(isbn: String, token: String) -> String
 { //Function for a user to borrow book.
     use schema::books::dsl::*;
     use schema::userbooks::dsl::*;
@@ -141,18 +161,29 @@ fn borrow_book(address: String, husnummer: String, postkod: i32, stad: String, i
     use schema::users::dsl::*;
     
     // TOKEN AUTHENTICATION INSERT HERE //
-    // NEED BOOK_ID, BORROW_DATE, RETURN_DATE, USER_ID
     let isbn_clone = isbn.clone(); //Clone because isbn is moved later.
     let connection = &mut create_connection(); //Establish connection
     
     //GETTING BOOK_ID
-    let found_book: Book = books.filter(isbn13.eq(isbn)).first::<Book>(connection).unwrap(); //Get the book we want to borrow.
+    let found_book_option: Result<Book, diesel::result::Error> = books.filter(isbn13.eq(isbn)).first::<Book>(connection); //Get the book we want to borrow.
+    let found_book = match found_book_option {
+        Ok(found_book_result) => found_book_result,
+        Err(err) => return format!("Error: {}", err)
+    };
     let book_bid = found_book.bid; //Get the book id.
-    //ONLY FIRST BELOW?
-    let coursebook_entry: Coursebook = coursebooks.filter(coursebook_book_id.eq(book_bid)).first::<Coursebook>(connection).unwrap(); //
+
+    let coursebook_entry_option: Result<Coursebook, diesel::result::Error> = coursebooks.filter(coursebook_book_id.eq(book_bid)).first::<Coursebook>(connection);
+    let coursebook_entry = match coursebook_entry_option {
+        Ok(coursebook_entry_result) => coursebook_entry_result,
+        Err(err) => return format!("Error: {}", err)
+    };
     let course_id = coursebook_entry.coursebook_book_id;
-    //Error here
-    let found_course: Course = courses.filter(cid.eq(course_id)).first::<Course>(connection).unwrap(); //Get the associated course.
+
+    let found_course_option: Result<Course, diesel::result::Error> = courses.filter(cid.eq(course_id)).first::<Course>(connection); //Get the associated course.
+    let found_course = match found_course_option {
+        Ok(found_course_result) => found_course_result,
+        Err(err) => return format!("Error: {}", err)
+    };
     let course_end = found_course.period_end;
     
     let borrow_dat = Local::now().date_naive();
@@ -162,29 +193,74 @@ fn borrow_book(address: String, husnummer: String, postkod: i32, stad: String, i
         3 => NaiveDate::from_ymd_opt(2024, 3, 30),
         4 => NaiveDate::from_ymd_opt(2023, 6, 30),
         5 => NaiveDate::from_ymd_opt(2023, 9, 31),
-        _ => NaiveDate::from_ymd_opt(1970, 1, 1), //If out of bounds period.
+        _ => NaiveDate::from_ymd_opt(2023, 12, 31), //If out of bounds period.
         }.unwrap(); //Get the return date.
-    let associated_user_id =  users.filter(uid.eq(token)).first::<User>(connection).unwrap().user_id;
+    let associated_user_option: Result<User, diesel::result::Error> =  users.filter(uid.eq(token)).first::<User>(connection);
+    let associated_user = match associated_user_option {
+        Ok(associated_user_result) => associated_user_result,
+        Err(err) => return format!("Error: {}", err)
+    };
+    let associated_user_id = associated_user.user_id;
     
-    let test = insert_into(userbooks)
+    let result = insert_into(userbooks)
         .values((book_id.eq(book_bid), borrow_date.eq(borrow_dat), return_date.eq(return_dat), user_id.eq(associated_user_id)))
         .execute(connection);
-    match test {
-        Ok(result) => {
+    match result {
+        Ok(_) => {
             decrease_stock(isbn_clone);
-            format!("{}", result)
+            format!("Succesfully borrowed book.")
         },
-        Err(err) => format!("{}", err),
+        Err(err) => format!("Error: {}", err),
     }
     //Check what period course is in.
 } 
 
 #[get("/userbooks/<token>")] //Function to get all books
-fn get_userbooks(token: String) 
+fn get_userbooks(token: String) -> String
 {
+    use schema::books::dsl::*;
+    use schema::users::dsl::*;
+    use schema::userbooks::columns::user_id;
     use schema::userbooks::dsl::*;
+    //AUTHENTICATION
 
-    //Get the book id's from all the userbook tables, use them to search through the 
+    let connection = &mut create_connection(); //Establish connection
+    
+    let associated_user_option: Result<User, diesel::result::Error> = users.filter(uid.eq(token)).first::<User>(connection);
+    let associated_user = match associated_user_option {
+        Ok(associated_user_result) => associated_user_result,
+        Err(err) => return format!("{}", err),
+    }; //Find associated user    
+
+    let associated_userbooks_option: Result<Vec<Userbook>, diesel::result::Error> = userbooks.filter(user_id.eq(associated_user.user_id)).load::<Userbook>(connection);
+    let associated_userbooks = match associated_userbooks_option {
+        Ok(associated_userbooks_result) => associated_userbooks_result,
+        Err(err) => return format!("{}", err),
+    }; //Get the vector with all of the users books.
+
+    let mut frontend_userbooks_string= String::new(); //Create a vector of the frontend userbook.
+    
+    for single_userbook in associated_userbooks {
+        let associated_book_option: Result<Book, diesel::result::Error> = books.filter(bid.eq(single_userbook.book_id)).first::<Book>(connection);
+        let associated_book = match associated_book_option {
+            Ok(associated_book_result) => associated_book_result,
+            Err(err) => return format!("{}", err),
+        }; //Get the related book.
+
+        let frontend_userbook = FrontEndUserbook {
+            title: associated_book.title,
+            isbn13: associated_book.isbn13,
+            authors: associated_book.authors,
+            borrow_date: single_userbook.borrow_date,
+            return_date: single_userbook.return_date,
+        }; //Insert all the relevant elements.
+        frontend_userbooks_string.push_str(&serde_json::to_string(&frontend_userbook).unwrap()); //Append to vector of userbooks.
+    };
+
+    return frontend_userbooks_string
+
+    //For every one of the entries found, get the related book, and fill the frontend userbook with relevant values.
+    //Once finished convert the string to json and return it.
 
 } 
 
@@ -203,13 +279,13 @@ fn return_book(isbn: String, token: String) -> String {
     let associated_user_option: Result<User, diesel::result::Error> = users.filter(uid.eq(token)).first::<User>(connection);
     let associated_user = match associated_user_option {
         Ok(associated_user_result) => associated_user_result,
-        Err(err) => return format!("{}", err),
+        Err(err) => return format!("Error: {}", err),
     }; //Find associated user
     
     let associated_book_option: Result<Book, diesel::result::Error> = books.filter(isbn13.eq(isbn)).first::<Book>(connection);
     let associated_book = match associated_book_option {
         Ok(associated_book_result) => associated_book_result,
-        Err(err) => return format!("{}", err),
+        Err(err) => return format!("Error: {}", err),
     }; //Get the associated book.
 
     //Get the terms to search userbooks table with.
@@ -218,9 +294,9 @@ fn return_book(isbn: String, token: String) -> String {
 
     let associated_userbook_option = diesel::delete(userbooks.filter(book_id.eq(search_book_id)).filter(user_id.eq(search_user_id_int))).execute(connection);
     match associated_userbook_option {
-        Ok(result) => {
+        Ok(_) => {
             increase_stock(isbn_clone, 1);
-            return format!("{}", result)
+            return format!("Succesfully returned book.")
     },
     Err(err) => return format!("{}", err),
     };
@@ -232,10 +308,10 @@ fn return_book(isbn: String, token: String) -> String {
 }
 
 #[get("/buy/<isbn>/<token>")]
-fn sell_book(isbn: String, token: String) {
+fn sell_book(isbn: String, token: String) -> String {
 
     //User authentication
-    increase_stock(isbn, 1); //Increase the stock by one.
+    increase_stock(isbn, 1) //Increase the stock by one.
 }
 
 #[get("/books/next-period/<token>")] //Function that returns the books the user will need in the next period.
@@ -247,7 +323,13 @@ fn get_next_period_books(token: String) -> String
     use schema::courses::dsl::*;
 
     let connection = &mut create_connection(); //Establish connection
-    let related_user: User = users.filter(uid.eq(token)).first::<User>(connection).unwrap(); //Get the related user.
+    
+    let related_user_option: Result<User, diesel::result::Error> = users.filter(uid.eq(token)).first::<User>(connection); //Get the related user.
+    let related_user = match related_user_option {
+        Ok(related_user_result) => related_user_result,
+        Err(err) => return format!("Error: {}", err)
+    };
+
     let today = Local::now().date_naive();
     let user_period = match today {
         d if today >= NaiveDate::from_ymd_opt(2023, 3, 27).unwrap() && today <= NaiveDate::from_ymd_opt(2023, 6, 4).unwrap() => 4,
@@ -265,7 +347,7 @@ fn get_next_period_books(token: String) -> String
     }; //Get all the courses for the user in the next period (vector).
     let next_period_courses = match next_period_courses_result {
         Ok(courses_result) => courses_result,
-        Err(err) => return format!("{}", err),
+        Err(err) => return format!("Error: {}", err),
     };
     let mut next_period_books = String::new(); //String with next period books.
 

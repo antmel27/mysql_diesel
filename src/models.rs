@@ -64,6 +64,15 @@ pub struct Userbook {
     pub user_id: i32,
 } 
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct FrontEndUserbook {
+    pub title: String,
+    pub isbn13: Option<String>,
+    pub authors: String,
+    pub borrow_date: NaiveDate,
+    pub return_date: NaiveDate,
+} 
+
 #[derive(Queryable, Debug, Identifiable, Serialize, Deserialize)]
 #[diesel(primary_key(user_id))]
 pub struct User {
