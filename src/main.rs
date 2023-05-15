@@ -240,6 +240,7 @@ async fn get_userbooks(token: String) -> String
 {
     use schema::books::dsl::*;
     use schema::users::dsl::*;
+    use schema::userbooks::dsl::*;
     use schema::userbooks::columns::user_id;
     let client = reqwest::Client::new();
 	let token_uid: String = match client.get(format!("https://courseLend.akerhielm.nu/auth/whoami/{token}"))
@@ -257,10 +258,6 @@ async fn get_userbooks(token: String) -> String
 		},
 		Err(_) => return "Could not authenticate".to_string()
 	};
-
-    use schema::userbooks::dsl::*;
-    //AUTHENTICATION
-
     let connection = &mut create_connection(); //Establish connection
     
     let associated_user_option: Result<User, diesel::result::Error> = users.filter(uid.eq(token_uid)).first::<User>(connection);
@@ -268,7 +265,6 @@ async fn get_userbooks(token: String) -> String
         Ok(associated_user_result) => associated_user_result,
         Err(err) => return format!("{}", err),
     }; //Find associated user    
-
     let associated_userbooks_option: Result<Vec<Userbook>, diesel::result::Error> = userbooks.filter(user_id.eq(associated_user.user_id)).load::<Userbook>(connection);
     let associated_userbooks = match associated_userbooks_option {
         Ok(associated_userbooks_result) => associated_userbooks_result,
@@ -276,7 +272,6 @@ async fn get_userbooks(token: String) -> String
     }; //Get the vector with all of the users books.
 
     let mut frontend_userbooks_string= String::new(); //Create a vector of the frontend userbook.
-    
     for single_userbook in associated_userbooks {
         let associated_book_option: Result<Book, diesel::result::Error> = books.filter(bid.eq(single_userbook.book_id)).first::<Book>(connection);
         let associated_book = match associated_book_option {
@@ -293,12 +288,10 @@ async fn get_userbooks(token: String) -> String
         }; //Insert all the relevant elements.
         frontend_userbooks_string.push_str(&serde_json::to_string(&frontend_userbook).unwrap()); //Append to vector of userbooks.
     };
-
     return frontend_userbooks_string
 
     //For every one of the entries found, get the related book, and fill the frontend userbook with relevant values.
     //Once finished convert the string to json and return it.
-
 } 
 
 #[get("/return/<isbn>/<token>")]
@@ -365,10 +358,22 @@ async fn return_book(isbn: String, token: String) -> String {
 
 #[get("/buy/<isbn>/<token>")]
 async fn sell_book(isbn: String, token: String) -> String {
-
-    if !verify_token(token).await {
-        return format!("Error: Token verification failed.")
-    }
+    let client = reqwest::Client::new();
+    match client.get(format!("https://courseLend.akerhielm.nu/auth/whoami/{token}"))
+	.send().await {
+		Ok(res) => match res.text().await {
+			Ok(res) => {
+				let sub: serde_json::Value = serde_json::from_str(&res).unwrap();
+				if !sub["sub"].is_null() {
+					return "Could not authenticate".to_string()
+				} else {
+                    sub["sub"].as_str().unwrap().to_string()
+                }
+			},
+			Err(_) => return "Could not authenticate".to_string()
+		},
+		Err(_) => return "Could not authenticate".to_string()
+	};
     //User authentication
     increase_stock(isbn, 1) //Increase the stock by one.
 }
@@ -431,14 +436,16 @@ async fn get_next_period_books(token: String) -> String
 
     for course in next_period_courses
     {
-        //ERROR -- PROBLEM IS WHAT TO DO IF NO RESULT
-        let coursebook_result = coursebooks.filter(coursebook_course_id.eq(course.cid)).first::<Coursebook>(connection);         //Find the related coursebook entry and get book id.
-        let coursebook: Coursebook = match coursebook_result {
+        let coursebook_result: Result<Vec<Coursebook>, diesel::result::Error> = coursebooks.filter(coursebook_course_id.eq(course.cid)).load::<Coursebook>(connection);         //Find the related coursebook entry and get book id.
+        let coursebooks_vector: Vec<Coursebook> = match coursebook_result {
             Ok(coursebook_return) => coursebook_return, //If find
             Err(_) => continue, //Need to skip this somehow.
         };
-        let next_period_book: Book = books.filter(bid.eq(coursebook.coursebook_book_id)).first::<Book>(connection).unwrap(); //Find the related book.
-        next_period_books.push_str(&serde_json::to_string(&next_period_book).unwrap()); //Convert to string and push. 
+        for specific_coursebook in coursebooks_vector {
+            let next_period_book: Book = books.filter(bid.eq(specific_coursebook.coursebook_book_id)).first::<Book>(connection).unwrap(); //Find the related book.
+            next_period_books.push_str(&serde_json::to_string(&next_period_book).unwrap()); //Convert to string and push. 
+        }
+        
 
     }; 
     next_period_books
