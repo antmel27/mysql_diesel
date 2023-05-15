@@ -215,7 +215,7 @@ async fn borrow_book(name_of_reciever: String, address: String, husnummer: Strin
         5 => NaiveDate::from_ymd_opt(2023, 9, 31),
         _ => NaiveDate::from_ymd_opt(2023, 12, 31), //If out of bounds period.
         }.unwrap(); //Get the return date.
-    let associated_user_option: Result<User, diesel::result::Error> =  users.filter(uid.eq(token)).first::<User>(connection);
+    let associated_user_option: Result<User, diesel::result::Error> =  users.filter(uid.eq(token_uid)).first::<User>(connection);
     let associated_user = match associated_user_option {
         Ok(associated_user_result) => associated_user_result,
         Err(err) => return format!("Error: {}", err)
@@ -241,17 +241,29 @@ async fn get_userbooks(token: String) -> String
     use schema::books::dsl::*;
     use schema::users::dsl::*;
     use schema::userbooks::columns::user_id;
-    let token_clone = token.clone();
-    if !verify_token(token).await {
-        return format!("")
-    }
+    let client = reqwest::Client::new();
+	let token_uid: String = match client.get(format!("https://courseLend.akerhielm.nu/auth/whoami/{token}"))
+	.send().await {
+		Ok(res) => match res.text().await {
+			Ok(res) => {
+				let sub: serde_json::Value = serde_json::from_str(&res).unwrap();
+				if !sub["sub"].is_null() {
+					return "Could not authenticate".to_string()
+				} else {
+                    sub["sub"].as_str().unwrap().to_string()
+                }
+			},
+			Err(_) => return "Could not authenticate".to_string()
+		},
+		Err(_) => return "Could not authenticate".to_string()
+	};
 
     use schema::userbooks::dsl::*;
     //AUTHENTICATION
 
     let connection = &mut create_connection(); //Establish connection
     
-    let associated_user_option: Result<User, diesel::result::Error> = users.filter(uid.eq(token_clone)).first::<User>(connection);
+    let associated_user_option: Result<User, diesel::result::Error> = users.filter(uid.eq(token_uid)).first::<User>(connection);
     let associated_user = match associated_user_option {
         Ok(associated_user_result) => associated_user_result,
         Err(err) => return format!("{}", err),
