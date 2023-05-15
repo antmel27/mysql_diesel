@@ -168,7 +168,7 @@ async fn borrow_book(name_of_reciever: String, address: String, husnummer: Strin
 		Ok(res) => match res.text().await {
 			Ok(res) => {
 				let sub: serde_json::Value = serde_json::from_str(&res).unwrap();
-				if !sub["sub"].is_null() {
+				if sub["sub"].is_null() {
 					return "Could not authenticate".to_string()
 				} else {
                     sub["sub"].as_str().unwrap().to_string()
@@ -248,7 +248,7 @@ async fn get_userbooks(token: String) -> String
 		Ok(res) => match res.text().await {
 			Ok(res) => {
 				let sub: serde_json::Value = serde_json::from_str(&res).unwrap();
-				if !sub["sub"].is_null() {
+				if sub["sub"].is_null() {
 					return "Could not authenticate".to_string()
 				} else {
                     sub["sub"].as_str().unwrap().to_string()
@@ -303,7 +303,7 @@ async fn return_book(isbn: String, token: String) -> String {
 		Ok(res) => match res.text().await {
 			Ok(res) => {
 				let sub: serde_json::Value = serde_json::from_str(&res).unwrap();
-				if !sub["sub"].is_null() {
+				if sub["sub"].is_null() {
 					return "Could not authenticate".to_string()
 				} else {
                     sub["sub"].as_str().unwrap().to_string()
@@ -383,18 +383,18 @@ async fn get_next_period_books(token: String) -> String
 {
 
     let client = reqwest::Client::new();
-	let token_uid: String = match client.get(format!("https://courseLend.akerhielm.nu/auth/whoami/{token}"))
+	let token_uid: String = match client.get(format!("https://courselend.akerhielm.nu/auth/whoami/{token}"))
 	.send().await {
 		Ok(res) => match res.text().await {
 			Ok(res) => {
 				let sub: serde_json::Value = serde_json::from_str(&res).unwrap();
-				if !sub["sub"].is_null() {
-					return "Could not authenticate".to_string()
+				if sub["sub"].is_null() {
+					return "Null sub".to_string()
 				} else {
                     sub["sub"].as_str().unwrap().to_string()
                 }
 			},
-			Err(_) => return "Could not authenticate".to_string()
+			Err(_) => return "Other err".to_string()
 		},
 		Err(_) => return "Could not authenticate".to_string()
 	};
@@ -407,7 +407,7 @@ async fn get_next_period_books(token: String) -> String
 
     let connection = &mut create_connection(); //Establish connection
     
-    let related_user_option: Result<User, diesel::result::Error> = users.filter(uid.eq(token)).first::<User>(connection); //Get the related user.
+    let related_user_option: Result<User, diesel::result::Error> = users.filter(uid.eq(token_uid.clone())).first::<User>(connection); //Get the related user.
     let related_user = match related_user_option {
         Ok(related_user_result) => related_user_result,
         Err(err) => return format!("Error: {}", err)
@@ -449,6 +449,7 @@ async fn get_next_period_books(token: String) -> String
 
     }; 
     next_period_books
+
 } 
 
 
