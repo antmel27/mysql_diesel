@@ -458,6 +458,7 @@ fn rocket() -> _ {
         .mount("/", routes![return_book])
         .mount("/", routes![sell_book])
         .mount("/", routes![get_next_period_books])
+        .mount("/", routes![get_userbooks])
 
 }
 
